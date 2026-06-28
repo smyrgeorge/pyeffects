@@ -46,7 +46,7 @@ in-between frames and encodes them into a smooth MP4. Below, the *Glitch Height*
 100%:
 
 <p align="center">
-  <img src="docs/img/glitch-height.gif" alt="Glitch Height video — strength ramped 0 → 100%" width="480">
+  <img src="docs/img/glitch-height.gif" alt="Glitch Height video — strength ramped 0 → 100%" width="400">
 </p>
 
 > See [**Video (animated parameters)**](#video-animated-parameters) below for the full list of rendering options.

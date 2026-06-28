@@ -42,6 +42,8 @@ class VideoWorker(QThread):
     """Renders an animated-parameter video off the UI thread, reporting progress."""
 
     progress = Signal(int, int)   # (frames done, frames total)
+    encoding = Signal()           # ffmpeg encode started (all frames rendered)
+    log = Signal(str)             # a line of ffmpeg output during encoding
     done = Signal(object)         # output Path, or None if cancelled
     failed = Signal(str)
 
@@ -74,6 +76,8 @@ class VideoWorker(QThread):
                 values=self._values, duration=self._duration, fps=self._fps,
                 frames=self._frames, max_size=self._max_size, smooth=self._smooth,
                 on_progress=lambda d, t: self.progress.emit(d, t),
+                on_encode=lambda: self.encoding.emit(),
+                on_log=lambda line: self.log.emit(line),
                 should_cancel=lambda: self._cancelled)
             self.done.emit(out)
         except Exception as exc:  # noqa: BLE001 — report to the UI thread

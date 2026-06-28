@@ -15,7 +15,7 @@ from PIL import Image
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox,
                                QFileDialog, QFormLayout, QFrame, QHBoxLayout,
-                               QLabel, QMainWindow, QMessageBox, QProgressDialog,
+                               QLabel, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSizePolicy, QSpinBox,
                                QVBoxLayout, QWidget)
 
@@ -25,6 +25,7 @@ from render.video import (DEFAULT_DURATION, DEFAULT_FPS, DEFAULT_FRAMES,
 from ui.compare import CompareView
 from ui.controls import ControlPanel
 from ui.qt_image import pil_to_qpixmap
+from ui.render_dialog import RenderDialog
 from ui.spinner import Spinner
 from ui.widgets import divider, downscale, make_param_spin, section_label
 from ui.workers import PreviewWorker, VideoWorker
@@ -56,7 +57,7 @@ class MainWindow(QMainWindow):
         self._preview_src: Image.Image | None = None  # downscaled for preview
         self._source_path: Path | None = None       # path of the loaded image
         self._video_worker: VideoWorker | None = None
-        self._video_progress: QProgressDialog | None = None
+        self._render_dialog: RenderDialog | None = None
         self._preview_thread: PreviewWorker | None = None
         self._preview_dirty = False                  # re-render requested mid-render
 
@@ -200,10 +201,11 @@ class MainWindow(QMainWindow):
         self._frames_spin.setToolTip("Distinct frames rendered across the animation "
                                      "(higher = smoother, slower)")
 
-        # Resolution: render at the input's native size by default; unticking it
-        # enables a max-size cap.
+        # Resolution: render at a capped max size by default; ticking "Native"
+        # uses the input's own size (still capped to 4K) and disables the spin.
         self._native_check = QCheckBox("Native (input size)")
-        self._native_check.setToolTip("Render at the input image's full resolution")
+        self._native_check.setToolTip("Render at the input image's resolution, capped to "
+                                      "4K (3840px) so the video plays back smoothly")
 
         self._size_spin = QSpinBox()
         self._size_spin.setRange(120, 3840)
@@ -211,7 +213,8 @@ class MainWindow(QMainWindow):
         self._size_spin.setSuffix(" px")
         self._size_spin.setValue(DEFAULT_MAX_SIZE)
         self._native_check.toggled.connect(lambda on: self._size_spin.setEnabled(not on))
-        self._native_check.setChecked(True)   # disables the size spin via the signal
+        self._native_check.setChecked(False)   # native off by default
+        self._size_spin.setEnabled(not self._native_check.isChecked())
 
         self._smooth_combo = QComboBox()
         self._smooth_combo.addItem("Blend (smooth)", "blend")
@@ -253,7 +256,8 @@ class MainWindow(QMainWindow):
         self._frames_spin.setValue(DEFAULT_FRAMES)
         self._size_spin.setValue(DEFAULT_MAX_SIZE)
         self._smooth_combo.setCurrentIndex(0)
-        self._native_check.setChecked(True)
+        self._native_check.setChecked(False)
+        self._size_spin.setEnabled(not self._native_check.isChecked())
 
     def _reset_transitions(self) -> None:
         """Restore the per-variable From→To ranges to their defaults."""
@@ -376,19 +380,18 @@ class MainWindow(QMainWindow):
         max_size = None if self._native_check.isChecked() else self._size_spin.value()
         smooth = self._smooth_combo.currentData()
 
-        self._video_progress = QProgressDialog("Rendering video…", "Cancel", 0, frames, self)
-        self._video_progress.setWindowTitle("Render video")
-        self._video_progress.setWindowModality(Qt.WindowModality.WindowModal)
-        self._video_progress.setMinimumDuration(0)
-        self._video_progress.setValue(0)
+        self._render_dialog = RenderDialog(frames, self)
 
         worker = VideoWorker(self._original, self._effect, path, self._source_path,
                              transitions, self._controls.values(), duration, fps, frames,
                              max_size, smooth, self)
         worker.progress.connect(self._on_video_progress)
+        worker.encoding.connect(self._on_video_encoding)
+        worker.log.connect(self._on_video_log)
         worker.done.connect(self._on_video_done)
         worker.failed.connect(self._on_video_failed)
-        self._video_progress.canceled.connect(worker.cancel)
+        self._render_dialog.canceled.connect(worker.cancel)
+        self._render_dialog.show()
         self._video_worker = worker
 
         self._video_btn.setEnabled(False)
@@ -397,10 +400,18 @@ class MainWindow(QMainWindow):
         worker.start()
 
     def _on_video_progress(self, done: int, total: int) -> None:
-        if self._video_progress is not None:
-            self._video_progress.setMaximum(total)
-            self._video_progress.setValue(done)
-            self._video_progress.setLabelText(f"Rendering frame {done} / {total}…")
+        if self._render_dialog is not None:
+            self._render_dialog.set_frame_progress(done, total)
+
+    def _on_video_encoding(self) -> None:
+        """All frames are rendered; ffmpeg is now encoding. Show a busy spinner + log."""
+        if self._render_dialog is not None:
+            self._render_dialog.start_encoding()
+        self._status.setText("Encoding video…")
+
+    def _on_video_log(self, line: str) -> None:
+        if self._render_dialog is not None:
+            self._render_dialog.append_log(line)
 
     def _on_video_done(self, out: object) -> None:
         self._finish_video()
@@ -415,9 +426,10 @@ class MainWindow(QMainWindow):
         self._status.setText("Video failed.")
 
     def _finish_video(self) -> None:
-        if self._video_progress is not None:
-            self._video_progress.reset()
-            self._video_progress = None
+        if self._render_dialog is not None:
+            self._render_dialog.finish()
+            self._render_dialog.deleteLater()
+            self._render_dialog = None
         self._video_worker = None
         self._video_btn.setEnabled(self._original is not None)
 

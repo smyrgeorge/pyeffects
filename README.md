@@ -68,9 +68,10 @@ python src/ui/app.py
 3. Adjust the effect settings on the right — the preview updates live.
 4. Below the effect settings, click **Save image…** to export the result at full resolution.
 5. In the **Render video** panel below it, set the duration, frame rate, frame count, resolution (native input size by
-   default, or untick to cap it), and smoothing, and use the **Transitions** rows to set a *from → to* range for any
-   effect variable (by default the strength ramps 0 → 100%). Each panel has a **Reset**. Click **Render video…** to
-   export the animation (a progress bar lets you cancel). Frames render in parallel across your CPU cores.
+   default — capped to 4K so the clip plays back smoothly — or untick to set a smaller cap), and smoothing, and use the
+   **Transitions** rows to set a *from → to* range for any effect variable (by default the strength ramps 0 → 100%).
+   Each panel has a **Reset**. Click **Render video…** to export the animation: a progress bar tracks the frames, then a
+   live **ffmpeg log** shows the encode, with a **Cancel** button. Frames render in parallel across your CPU cores.
 
 The preview is computed on a downscaled copy for responsiveness; exporting always re-renders at full resolution.
 
@@ -125,18 +126,18 @@ python src/render/video.py workspace/photo.jpg -e height -d 15 --frames 200 --sm
 python src/render/video.py workspace/photo.jpg --transition strength:0:1 --transition center_y:0.4:0.6
 ```
 
-| Option     | CLI flag        | Description                                       | Default        |
-|------------|-----------------|---------------------------------------------------|----------------|
-| Effect     | `-e/--effect`   | Effect id to animate (`glitch`, `height`, …)      | `height`       |
-| Output     | `-o/--output`   | Output `.mp4` path                                | `<name>.mp4`   |
+| Option     | CLI flag        | Description                                        | Default        |
+|------------|-----------------|----------------------------------------------------|----------------|
+| Effect     | `-e/--effect`   | Effect id to animate (`glitch`, `height`, …)       | `height`       |
+| Output     | `-o/--output`   | Output `.mp4` path                                 | `<name>.mp4`   |
 | Parameter  | `-p/--param`    | Parameter to animate (when `--transition` not set) | `strength`     |
-| Transition | `--transition`  | `NAME:FROM:TO`, repeatable — animate several vars   | strength 0→max |
-| Duration   | `-d/--duration` | Video length in seconds                           | `10`           |
-| Frame rate | `--fps`         | Output frames per second                          | `30`           |
-| Frames     | `--frames`      | Distinct frames rendered across the animation     | `100`          |
-| Max size   | `--max-size`    | Longest edge of the video in pixels               | `1024`         |
-| Smoothing  | `--smooth`      | In-between frames: `blend`, `motion`, or `none`   | `blend`        |
-| Workers    | `--workers`     | Frames rendered in parallel                       | CPU count      |
+| Transition | `--transition`  | `NAME:FROM:TO`, repeatable — animate several vars  | strength 0→max |
+| Duration   | `-d/--duration` | Video length in seconds                            | `10`           |
+| Frame rate | `--fps`         | Output frames per second                           | `30`           |
+| Frames     | `--frames`      | Distinct frames rendered across the animation      | `100`          |
+| Max size   | `--max-size`    | Longest edge of the video in px (capped at 3840)   | `1024`         |
+| Smoothing  | `--smooth`      | In-between frames: `blend`, `motion`, or `none`    | `blend`        |
+| Workers    | `--workers`     | Frames rendered in parallel                        | CPU count      |
 
 The frames are rendered into a folder named `_<image-stem>` next to the image, then encoded to `<image-stem>.mp4`.
 Because each frame of an effect like *Height* is expensive, only `--frames` distinct frames are rendered (one per

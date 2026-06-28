@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -55,8 +56,16 @@ DEFAULT_FRAMES = 100      # distinct renders (0..100%); ffmpeg fills to fps*dura
 DEFAULT_MAX_SIZE = 1024   # longest edge of the video, in pixels
 DEFAULT_SMOOTH = "blend"  # frame interpolation: "blend", "motion", or "none"
 
+#: Hard ceiling on the encoded video's longest edge. H.264 much above 4K exceeds
+#: most hardware decoders (incl. Apple VideoToolbox), which then stutters/skips on
+#: playback even though the file is valid — so even "native" rendering is capped
+#: to this. Matches the GUI's max-size limit.
+MAX_VIDEO_SIZE = 3840
+
 ProgressFn = Callable[[int, int], None]
 CancelFn = Callable[[], bool]
+NotifyFn = Callable[[], None]
+LogFn = Callable[[str], None]
 
 
 def render_video(
@@ -79,6 +88,8 @@ def render_video(
     values: dict[str, Any] | None = None,
     on_progress: ProgressFn | None = None,
     should_cancel: CancelFn | None = None,
+    on_encode: NotifyFn | None = None,
+    on_log: LogFn | None = None,
 ) -> Path | None:
     """
     Render an MP4 that animates one or more parameters of ``effect`` across the
@@ -114,6 +125,11 @@ def render_video(
         on_progress: Called as ``(done, total)`` after each frame renders.
         should_cancel: Polled before each frame; return ``True`` to abort (the
             function then returns ``None``).
+        on_encode: Called once, with no arguments, right before ffmpeg starts
+            encoding (i.e. after every frame has rendered). Lets a UI switch from
+            a frame-progress bar to an indeterminate "encoding" spinner.
+        on_log: Called with each line ffmpeg emits while encoding (its progress
+            stats and diagnostics). Lets a UI show a live encode log.
 
     Returns:
         The output path, or ``None`` if cancelled.
@@ -190,8 +206,10 @@ def render_video(
     # The input rate is passed as an exact rational (e.g. "101/10"); a rounded
     # decimal makes the image2 demuxer mistime the frames.
     input_fps = Fraction(frames) / Fraction(str(duration))
+    if on_encode is not None:
+        on_encode()
     _encode(fdir, out_path, f"{input_fps.numerator}/{input_fps.denominator}",
-            fps, duration, smooth)
+            fps, duration, smooth, on_log=on_log)
     return out_path
 
 
@@ -211,10 +229,16 @@ def _param_range(effect: Effect, param: str, start: float | None,
 
 
 def _prepare(image: Image.Image, max_size: int | None) -> Image.Image:
-    """Scale to ``max_size`` (longest edge) and force even dimensions for H.264."""
+    """Scale to fit ``max_size`` (longest edge) and force even dimensions for H.264.
+
+    Even when ``max_size`` is ``None`` ("native"), the result is capped to
+    ``MAX_VIDEO_SIZE``: H.264 much larger than 4K exceeds hardware decoders and
+    stutters on playback, so an uncapped native render is effectively unplayable.
+    """
+    cap = min(max_size, MAX_VIDEO_SIZE) if max_size else MAX_VIDEO_SIZE
     width, height = image.size
-    if max_size and max(width, height) > max_size:
-        scale = max_size / max(width, height)
+    if max(width, height) > cap:
+        scale = cap / max(width, height)
         width, height = round(width * scale), round(height * scale)
     width = max(2, width - width % 2)
     height = max(2, height - height % 2)
@@ -238,7 +262,8 @@ def _ffmpeg_exe() -> str:
 
 
 def _encode(frames_dir: Path, output: Path, input_fps: str, fps: int,
-            duration: float, smooth: str = DEFAULT_SMOOTH) -> None:
+            duration: float, smooth: str = DEFAULT_SMOOTH,
+            on_log: LogFn | None = None) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         _ffmpeg_exe(), "-y",
@@ -263,10 +288,38 @@ def _encode(frames_dir: Path, output: Path, input_fps: str, fps: int,
         "-movflags", "+faststart",
         str(output),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        tail = "\n".join(result.stderr.strip().splitlines()[-8:])
-        raise RuntimeError(f"ffmpeg failed (exit {result.returncode}):\n{tail}")
+
+    # Stream ffmpeg's output so callers can show live progress. ffmpeg rewrites its
+    # stats line in place with carriage returns, so split on both CR and LF to
+    # surface each update as its own line. The full output is retained so a failure
+    # can report a useful tail.
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE, bufsize=0)
+    assert proc.stderr is not None
+    lines: list[str] = []
+    buffer = b""
+    while True:
+        chunk = proc.stderr.read(256)
+        if not chunk:
+            break
+        buffer += chunk
+        segments = re.split(rb"[\r\n]", buffer)
+        buffer = segments.pop()   # keep the trailing, possibly-incomplete segment
+        for segment in segments:
+            text = segment.decode("utf-8", "replace").strip()
+            if text:
+                lines.append(text)
+                if on_log is not None:
+                    on_log(text)
+    leftover = buffer.decode("utf-8", "replace").strip()
+    if leftover:
+        lines.append(leftover)
+        if on_log is not None:
+            on_log(leftover)
+
+    if proc.wait() != 0:
+        tail = "\n".join(lines[-8:])
+        raise RuntimeError(f"ffmpeg failed (exit {proc.returncode}):\n{tail}")
 
 
 # --------------------------------------------------------------------------- #
@@ -326,30 +379,49 @@ def main(argv: list[str] | None = None) -> int:
     effect = _resolve_effect(args.effect)
 
     from rich.console import Console
-    from rich.progress import (BarColumn, Progress, TaskProgressColumn,
-                               TextColumn, TimeRemainingColumn)
+    from rich.markup import escape
+    from rich.progress import (BarColumn, Progress, SpinnerColumn,
+                               TaskProgressColumn, TextColumn, TimeRemainingColumn)
 
     console = Console()
     animated = ", ".join(transitions) if transitions else args.param
     console.print(f"\n[bold]Rendering[/bold] {effect.name} '{animated}' → "
                  f"[cyan]{args.duration:g}s @ {args.fps}fps[/cyan]\n")
 
-    with Progress(TextColumn("[progress.description]{task.description}"), BarColumn(),
+    with Progress(SpinnerColumn(finished_text="[green]✓[/green]"),
+                  TextColumn("[progress.description]{task.description}"), BarColumn(),
                   TaskProgressColumn(), TimeRemainingColumn(), console=console) as progress:
-        task = progress.add_task("Frames", total=args.frames)
+        task = progress.add_task("Rendering frames", total=args.frames)
+        encode_task = None
 
         def bump(done: int, total: int) -> None:
             progress.update(task, completed=done, total=total)
+
+        def on_encode() -> None:
+            # Frames are done; ffmpeg now encodes (and can be slow). Switch to an
+            # indeterminate spinner so the user knows it is still running.
+            nonlocal encode_task
+            progress.update(task, completed=args.frames)
+            encode_task = progress.add_task("Encoding video", total=None)
+
+        def on_log(line: str) -> None:
+            # Show ffmpeg's latest line beside the encode spinner. Escape it so
+            # ffmpeg's own brackets aren't parsed as rich markup.
+            if encode_task is not None:
+                progress.update(encode_task, description=f"Encoding · {escape(line[:70])}")
 
         try:
             out = render_video(
                 args.input_file, effect, args.output,
                 param=args.param, transitions=transitions, duration=args.duration, fps=args.fps,
                 frames=args.frames, max_size=args.max_size, smooth=args.smooth,
-                workers=args.workers, on_progress=bump)
+                workers=args.workers, on_progress=bump, on_encode=on_encode, on_log=on_log)
         except Exception as exc:  # noqa: BLE001 — surface any failure to the user
             console.print(f"[red]Error:[/red] {exc}")
             return 1
+
+        if encode_task is not None:
+            progress.update(encode_task, total=1, completed=1, description="Encoding video")
 
     console.print(f"\n[green]✓ Saved[/green] [cyan]{out}[/cyan]\n")
     return 0

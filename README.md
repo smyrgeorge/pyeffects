@@ -11,8 +11,9 @@ effect only means implementing a small interface and registering it — the UI a
 automatically.
 
 It also **renders videos**: pick an effect, choose a *from → to* range for any of its variables (or several at once),
-and PyEffects sweeps those values across the frames and encodes a smooth MP4 — animating, for example, the *Height*
-effect ramping from 0 to 100% strength. Frames render in parallel across your CPU cores and ffmpeg smooths the motion.
+and PyEffects interpolates those values across the frames and encodes a smooth MP4 — animating, for example, the
+*Height* effect ramping from 0 to 100% strength. Frames render in parallel across your CPU cores and ffmpeg smooths
+the motion.
 
 Two effects ship in the box:
 
@@ -112,26 +113,27 @@ python src/effects/glitch_height.py workspace/photo.jpg --strength 0.6 --center-
 | Circular frame | `--circle`    | Mask the result to a circle, fading corners black | off     |
 | Scanlines      | `--scanlines` | Strength of the darkened CRT-style scanlines      | `0.0`   |
 
-### Video (parameter sweep)
+### Video (animated parameters)
 
-Render an MP4 that animates one of an effect's parameters from its minimum to its maximum — by default the **strength**,
-ramped from 0 to 100%:
+Render an MP4 that animates an effect over time. Give any of its parameters a *from → to* range and PyEffects
+interpolates them across the frames while holding every other parameter constant — animate a single variable or
+several at once. By default it ramps the **strength** from 0 to 100%:
 
 ```bash
 python src/render/video.py workspace/photo.jpg                 # height effect, 10s @ 30fps
 python src/render/video.py workspace/photo.jpg -e height -d 15 --frames 200 --smooth motion
-python src/render/video.py workspace/photo.jpg --sweep strength:0:1 --sweep center_y:0.4:0.6
+python src/render/video.py workspace/photo.jpg --transition strength:0:1 --transition center_y:0.4:0.6
 ```
 
 | Option     | CLI flag        | Description                                       | Default        |
 |------------|-----------------|---------------------------------------------------|----------------|
 | Effect     | `-e/--effect`   | Effect id to animate (`glitch`, `height`, …)      | `height`       |
 | Output     | `-o/--output`   | Output `.mp4` path                                | `<name>.mp4`   |
-| Parameter  | `-p/--param`    | Parameter to sweep (when `--sweep` is not given)  | `strength`     |
-| Sweep      | `--sweep`       | `NAME:FROM:TO`, repeatable — animate several vars | strength 0→max |
+| Parameter  | `-p/--param`    | Parameter to animate (when `--transition` not set) | `strength`     |
+| Transition | `--transition`  | `NAME:FROM:TO`, repeatable — animate several vars   | strength 0→max |
 | Duration   | `-d/--duration` | Video length in seconds                           | `10`           |
 | Frame rate | `--fps`         | Output frames per second                          | `30`           |
-| Frames     | `--frames`      | Distinct frames rendered across the sweep         | `100`          |
+| Frames     | `--frames`      | Distinct frames rendered across the animation     | `100`          |
 | Max size   | `--max-size`    | Longest edge of the video in pixels               | `1024`         |
 | Smoothing  | `--smooth`      | In-between frames: `blend`, `motion`, or `none`   | `blend`        |
 | Workers    | `--workers`     | Frames rendered in parallel                       | CPU count      |
@@ -164,7 +166,7 @@ pyeffects/
 │   │   ├── widgets.py       # small widget factories / helpers
 │   │   └── qt_image.py      # Pillow ↔ Qt conversion
 │   ├── render/
-│   │   └── video.py         # parameter-sweep video renderer (CLI + used by the GUI)
+│   │   └── video.py         # animated-parameter video renderer (CLI + used by the GUI)
 │   └── utils/               # shared helpers
 │       ├── cli.py           # shared command-line runner (params → argparse)
 │       ├── file.py          # file-path helpers

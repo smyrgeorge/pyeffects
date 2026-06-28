@@ -39,14 +39,14 @@ class PreviewWorker(QThread):
 
 
 class VideoWorker(QThread):
-    """Renders a parameter-sweep video off the UI thread, reporting progress."""
+    """Renders an animated-parameter video off the UI thread, reporting progress."""
 
     progress = Signal(int, int)   # (frames done, frames total)
     done = Signal(object)         # output Path, or None if cancelled
     failed = Signal(str)
 
     def __init__(self, image: Image.Image, effect: Effect, output: str,
-                 source_path: Path, sweeps: dict, values: dict,
+                 source_path: Path, transitions: dict, values: dict,
                  duration: float, fps: int, frames: int, max_size: int | None,
                  smooth: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -54,7 +54,7 @@ class VideoWorker(QThread):
         self._effect = effect
         self._output = output
         self._source_path = source_path
-        self._sweeps = sweeps
+        self._transitions = transitions
         self._values = values
         self._duration = duration
         self._fps = fps
@@ -70,7 +70,7 @@ class VideoWorker(QThread):
         try:
             out = render_video(
                 self._image, self._effect, self._output,
-                source_path=self._source_path, sweeps=self._sweeps,
+                source_path=self._source_path, transitions=self._transitions,
                 values=self._values, duration=self._duration, fps=self._fps,
                 frames=self._frames, max_size=self._max_size, smooth=self._smooth,
                 on_progress=lambda d, t: self.progress.emit(d, t),

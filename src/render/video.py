@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Parameter-sweep video renderer.
+Animated-parameter video renderer.
 
-Animates one of an effect's parameters from its minimum to its maximum and
-encodes the frames into an MP4. The default sweep is the ``strength`` of the
-effect, ramped from 0 to 100%.
+Animates one or more of an effect's parameters across the frames of a video and
+encodes the result into an MP4. Each animated parameter is given a ``from → to``
+range; every other parameter is held constant. By default it animates the
+``strength`` of the effect, ramped from 0 to 100%.
 
 How it works:
 
@@ -67,7 +68,7 @@ def render_video(
     param: str = DEFAULT_PARAM,
     start: float | None = None,
     end: float | None = None,
-    sweeps: dict[str, tuple[float, float]] | None = None,
+    transitions: dict[str, tuple[float, float]] | None = None,
     duration: float = DEFAULT_DURATION,
     fps: int = DEFAULT_FPS,
     frames: int = DEFAULT_FRAMES,
@@ -80,7 +81,8 @@ def render_video(
     should_cancel: CancelFn | None = None,
 ) -> Path | None:
     """
-    Render an MP4 that sweeps ``param`` of ``effect`` across the given image.
+    Render an MP4 that animates one or more parameters of ``effect`` across the
+    given image.
 
     Args:
         image: A PIL image or a path to one. If a path, it also sets the default
@@ -92,23 +94,23 @@ def render_video(
             image. Required (with ``image`` a PIL image) if ``output`` and
             ``frames_dir`` are both omitted.
         param: Name of the parameter to animate (single-parameter shortcut).
-        start, end: Sweep range for ``param``. Default to its min/max.
-        sweeps: Map of ``{parameter: (start, end)}`` to animate several
+        start, end: Range for ``param``. Default to its min/max.
+        transitions: Map of ``{parameter: (start, end)}`` to animate several
             parameters at once. Overrides ``param``/``start``/``end`` when given.
         duration: Video length in seconds.
         fps: Output frames per second.
         smooth: Frame interpolation used to fill up to ``fps``: ``"blend"``
             (cross-faded), ``"motion"`` (motion-compensated) or ``"none"``
             (duplicated frames).
-        frames: Number of distinct frames to render across the sweep. ffmpeg
+        frames: Number of distinct frames to render across the animation. ffmpeg
             duplicates them to reach ``fps * duration`` frames, so higher is
             smoother but slower.
         max_size: Longest edge of the rendered video (``None`` keeps full size).
         workers: Number of frames to render in parallel (default: CPU count).
         frames_dir: Where to write the PNG frames. Defaults to ``_<stem>`` next
             to the image.
-        values: Other parameter values to hold constant (the swept ``param`` is
-            overridden per frame). Defaults to the effect's defaults.
+        values: Other parameter values to hold constant (the animated parameters
+            are overridden per frame). Defaults to the effect's defaults.
         on_progress: Called as ``(done, total)`` after each frame renders.
         should_cancel: Polled before each frame; return ``True`` to abort (the
             function then returns ``None``).
@@ -129,11 +131,11 @@ def render_video(
     out_path = Path(output) if output else source_path.with_suffix(".mp4")
     fdir = Path(frames_dir) if frames_dir else source_path.parent / f"_{source_path.stem}"
 
-    if sweeps:
-        sweep_ranges = {name: (float(a), float(b)) for name, (a, b) in sweeps.items()}
+    if transitions:
+        ranges = {name: (float(a), float(b)) for name, (a, b) in transitions.items()}
     else:
-        lo, hi = _sweep_range(effect, param, start, end)
-        sweep_ranges = {param: (lo, hi)}
+        lo, hi = _param_range(effect, param, start, end)
+        ranges = {param: (lo, hi)}
     kinds = {p.name: p.kind for p in effect.params()}
     base = dict(values) if values else {}
 
@@ -148,9 +150,9 @@ def render_video(
         stale.unlink()
 
     def frame_values(t: float) -> dict[str, Any]:
-        """Interpolate every swept parameter to position ``t`` in ``[0, 1]``."""
+        """Interpolate every animated parameter to position ``t`` in ``[0, 1]``."""
         vals = dict(base)
-        for name, (a, b) in sweep_ranges.items():
+        for name, (a, b) in ranges.items():
             value = a + t * (b - a)
             if kinds.get(name) is ParamKind.INT:
                 value = int(round(value))
@@ -197,7 +199,7 @@ def render_video(
 # Helpers
 # --------------------------------------------------------------------------- #
 
-def _sweep_range(effect: Effect, param: str, start: float | None,
+def _param_range(effect: Effect, param: str, start: float | None,
                  end: float | None) -> tuple[float, float]:
     descriptor = next((p for p in effect.params() if p.name == param), None)
     if descriptor is None:
@@ -282,7 +284,7 @@ def _resolve_effect(effect_id: str) -> Effect:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="video.py",
-        description="Render a video that sweeps an effect parameter from min to max.",
+        description="Render a video that animates one or more of an effect's parameters.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("input_file", help="Path to the input image file")
@@ -290,8 +292,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-o", "--output", default=None,
                         help="Output .mp4 path (default: '<name>.mp4' next to the input)")
     parser.add_argument("-p", "--param", default=DEFAULT_PARAM,
-                        help="Parameter to sweep (when --sweep is not given)")
-    parser.add_argument("--sweep", action="append", metavar="NAME:FROM:TO", default=None,
+                        help="Parameter to animate (when --transition is not given)")
+    parser.add_argument("--transition", action="append", metavar="NAME:FROM:TO", default=None,
                         help="Animate a parameter from FROM to TO; repeat to animate several")
     parser.add_argument("-d", "--duration", type=float, default=DEFAULT_DURATION,
                         help="Video length in seconds")
@@ -306,15 +308,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="Frames to render in parallel (default: CPU count)")
     args = parser.parse_args(argv)
 
-    sweeps = None
-    if args.sweep:
-        sweeps = {}
-        for spec in args.sweep:
+    transitions = None
+    if args.transition:
+        transitions = {}
+        for spec in args.transition:
             try:
                 name, lo, hi = spec.split(":")
-                sweeps[name] = (float(lo), float(hi))
+                transitions[name] = (float(lo), float(hi))
             except ValueError:
-                print(f"Invalid --sweep '{spec}'. Use NAME:FROM:TO (e.g. strength:0:1).")
+                print(f"Invalid --transition '{spec}'. Use NAME:FROM:TO (e.g. strength:0:1).")
                 return 1
 
     if not os.path.exists(args.input_file):
@@ -328,7 +330,8 @@ def main(argv: list[str] | None = None) -> int:
                                TextColumn, TimeRemainingColumn)
 
     console = Console()
-    console.print(f"\n[bold]Rendering[/bold] {effect.name} '{args.param}' sweep → "
+    animated = ", ".join(transitions) if transitions else args.param
+    console.print(f"\n[bold]Rendering[/bold] {effect.name} '{animated}' → "
                  f"[cyan]{args.duration:g}s @ {args.fps}fps[/cyan]\n")
 
     with Progress(TextColumn("[progress.description]{task.description}"), BarColumn(),
@@ -341,7 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             out = render_video(
                 args.input_file, effect, args.output,
-                param=args.param, sweeps=sweeps, duration=args.duration, fps=args.fps,
+                param=args.param, transitions=transitions, duration=args.duration, fps=args.fps,
                 frames=args.frames, max_size=args.max_size, smooth=args.smooth,
                 workers=args.workers, on_progress=bump)
         except Exception as exc:  # noqa: BLE001 — surface any failure to the user

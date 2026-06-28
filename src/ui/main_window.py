@@ -197,7 +197,7 @@ class MainWindow(QMainWindow):
         self._frames_spin = QSpinBox()
         self._frames_spin.setRange(2, 1000)
         self._frames_spin.setValue(DEFAULT_FRAMES)
-        self._frames_spin.setToolTip("Distinct frames rendered across the sweep "
+        self._frames_spin.setToolTip("Distinct frames rendered across the animation "
                                      "(higher = smoother, slower)")
 
         # Resolution: render at the input's native size by default; unticking it
@@ -357,9 +357,9 @@ class MainWindow(QMainWindow):
                 or self._source_path is None or self._video_worker is not None):
             return
 
-        sweeps = {name: (frm.value(), to.value())
-                  for name, (frm, to) in self._trans_spins.items()}
-        if not sweeps:
+        transitions = {name: (frm.value(), to.value())
+                       for name, (frm, to) in self._trans_spins.items()}
+        if not transitions:
             QMessageBox.information(self, "Render video",
                                    "This effect has no numeric parameter to animate.")
             return
@@ -383,7 +383,7 @@ class MainWindow(QMainWindow):
         self._video_progress.setValue(0)
 
         worker = VideoWorker(self._original, self._effect, path, self._source_path,
-                             sweeps, self._controls.values(), duration, fps, frames,
+                             transitions, self._controls.values(), duration, fps, frames,
                              max_size, smooth, self)
         worker.progress.connect(self._on_video_progress)
         worker.done.connect(self._on_video_done)
@@ -392,7 +392,7 @@ class MainWindow(QMainWindow):
         self._video_worker = worker
 
         self._video_btn.setEnabled(False)
-        animated = ", ".join(n for n, (a, b) in sweeps.items() if a != b)
+        animated = ", ".join(n for n, (a, b) in transitions.items() if a != b)
         self._status.setText(f"Rendering video ({animated or 'no change'})…")
         worker.start()
 

@@ -1,1 +1,1 @@
-"""Video rendering helpers (animated parameter sweeps)."""
+"""Video rendering helpers (animated effect parameters)."""

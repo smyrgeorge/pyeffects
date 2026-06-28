@@ -15,11 +15,12 @@ and PyEffects interpolates those values across the frames and encodes a smooth M
 *Height* effect ramping from 0 to 100% strength. Frames render in parallel across your CPU cores and ffmpeg smooths
 the motion.
 
-Two effects ship in the box:
+Three effects ship in the box:
 
 - **Glitch** — RGB shift, slice displacement, noise, and scanlines.
 - **Glitch Height** — a radial 3D-extrusion effect: the image bursts outward from a focal point into strong,
   pointed, feathery spikes that grow toward the edges, with an optional circular frame.
+- **Pixelate** — a blocky mosaic / pixel-art look, with optional retro color banding and soft blocks.
 
 ### Examples
 
@@ -32,6 +33,10 @@ Each effect shown in the app's before/after view.
 **Glitch Height** — radial 3D extrusion bursting from a focal point:
 
 ![Glitch Height effect before/after](docs/img/sample2.png)
+
+**Pixelate** — a blocky mosaic / pixel-art look:
+
+![Pixelate effect before/after](docs/img/sample3.png)
 
 ## Setup
 
@@ -114,6 +119,19 @@ python src/effects/glitch_height.py workspace/photo.jpg --strength 0.6 --center-
 | Circular frame | `--circle`    | Mask the result to a circle, fading corners black | off     |
 | Scanlines      | `--scanlines` | Strength of the darkened CRT-style scanlines      | `0.0`   |
 
+#### Pixelate settings
+
+```bash
+python src/effects/pixelate.py path/to/image.jpg
+python src/effects/pixelate.py workspace/photo.jpg --pixel-size 0.06 --levels 8 --smooth
+```
+
+| Setting       | CLI flag       | Description                                                      | Default |
+|---------------|----------------|------------------------------------------------------------------|---------|
+| Pixel size    | `--pixel-size` | Block size as a fraction of the longest edge (bigger = chunkier) | `0.03`  |
+| Color levels  | `--levels`     | Quantise each channel to N levels (256 = full color)             | `256`   |
+| Smooth blocks | `--smooth`     | Bilinear upscaling for soft blocks instead of hard pixels        | off     |
+
 ### Video (animated parameters)
 
 Render an MP4 that animates an effect over time. Give any of its parameters a *from → to* range and PyEffects
@@ -145,66 +163,6 @@ step) — in parallel across `--workers` threads. **ffmpeg** then fills the gap 
 smooth in-between frames (`--smooth blend`/`motion`) or by duplicating frames (`--smooth none`), so the video runs the
 full `--duration` and stays smooth. Raise `--frames` for crisper motion (slower), lower it for a quicker render.
 Encoding uses a bundled ffmpeg (`imageio-ffmpeg`) or a system `ffmpeg` if present.
-
-## Project Structure
-
-```
-pyeffects/
-├── requirements.txt
-├── src/
-│   ├── effects/
-│   │   ├── base.py          # Effect interface + Param descriptors
-│   │   ├── glitch.py        # GlitchEffect
-│   │   ├── glitch_height.py # GlitchHeightEffect (radial extrusion)
-│   │   └── registry.py      # list of available effects
-│   ├── ui/
-│   │   ├── app.py           # entry point (launches the window)
-│   │   ├── main_window.py   # MainWindow: preview + sidebar + export
-│   │   ├── compare.py       # before/after sliding-panel widget
-│   │   ├── controls.py      # builds controls from an effect's params
-│   │   ├── workers.py       # background preview/video render threads
-│   │   ├── spinner.py       # busy spinner overlay
-│   │   ├── widgets.py       # small widget factories / helpers
-│   │   └── qt_image.py      # Pillow ↔ Qt conversion
-│   ├── render/
-│   │   └── video.py         # animated-parameter video renderer (CLI + used by the GUI)
-│   └── utils/               # shared helpers
-│       ├── cli.py           # shared command-line runner (params → argparse)
-│       ├── file.py          # file-path helpers
-│       └── term.py          # terminal colors / icons
-└── workspace/             # scratch space for input/output images
-```
-
-## Adding a new effect
-
-The window is effect-agnostic. To add one:
-
-1. Subclass `Effect` (in `src/effects/base.py`) and set `id` / `name`.
-2. Return your settings from `params()` as `Param` descriptors — each becomes a slider, checkbox, or dropdown in the
-   GUI and a flag in the CLI.
-3. Implement `apply(image, **values)` to return the processed image.
-4. Register the class in `src/effects/registry.py`.
-
-That's it — no UI changes required. Example skeleton:
-
-```python
-from PIL import Image
-
-from effects.base import Effect, Param, ParamKind
-
-
-class InvertEffect(Effect):
-    id = "invert"
-    name = "Invert"
-
-    def params(self) -> list[Param]:
-        return [Param("amount", "Amount", ParamKind.FLOAT, default=1.0, min=0.0, max=1.0, step=0.01)]
-
-    def apply(self, image: Image.Image, **values) -> Image.Image:
-        v = self.merge(values)
-        ...
-        return result
-```
 
 ## License
 

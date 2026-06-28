@@ -45,9 +45,9 @@ renders a frame at each step along that range (in parallel across your CPU cores
 in-between frames and encodes them into a smooth MP4. Below, the *Glitch Height* effect ramps its **strength** from 0 to
 100%:
 
-<video src="https://github.com/smyrgeorge/pyeffects/raw/main/docs/img/glitch-height.mp4" controls muted loop width="100%">
-  Your browser can't play this video inline — <a href="https://github.com/smyrgeorge/pyeffects/raw/main/docs/img/glitch-height.mp4">download it here</a>.
-</video>
+[![Glitch Height video — strength ramped 0 → 100%](docs/img/glitch-height-poster.jpg)](https://github.com/smyrgeorge/pyeffects/blob/main/docs/img/glitch-height.mp4)
+
+▶️ *Click the image to play the rendered MP4 on GitHub (Glitch Height, strength 0 → 100%).*
 
 > See [**Video (animated parameters)**](#video-animated-parameters) below for the full list of rendering options.
 

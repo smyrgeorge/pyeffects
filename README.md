@@ -5,6 +5,8 @@ a built-in **video renderer** that animates an effect over time.
 
 ## About
 
+![PyEffects desktop app](docs/img/screenshot.png)
+
 PyEffects is a lightweight Python toolkit for applying image effects. It ships with a reusable GUI that shows a
 before/after slider and builds its settings controls **dynamically** from whichever effect is selected. Adding a new
 effect only means implementing a small interface and registering it — the UI and command-line parser adapt

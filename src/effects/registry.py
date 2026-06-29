@@ -13,6 +13,7 @@ from effects.glitch import GlitchEffect
 from effects.glitch_height import GlitchHeightEffect
 from effects.night import NightEffect
 from effects.pixelate import PixelateEffect
+from effects.popart import PopArtEffect
 
 #: Ordered list of effect factories shown in the UI (alphabetical by name).
 EFFECT_FACTORIES: list[type[Effect]] = [
@@ -20,6 +21,7 @@ EFFECT_FACTORIES: list[type[Effect]] = [
     GlitchHeightEffect,
     NightEffect,
     PixelateEffect,
+    PopArtEffect,
 ]
 
 

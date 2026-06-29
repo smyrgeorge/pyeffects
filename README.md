@@ -15,7 +15,7 @@ and PyEffects interpolates those values across the frames and encodes a smooth M
 *Height* effect ramping from 0 to 100% strength. Frames render in parallel across your CPU cores and ffmpeg smooths
 the motion.
 
-Four effects ship in the box:
+Five effects ship in the box:
 
 - **Glitch** — RGB shift, slice displacement, noise, and scanlines.
 - **Glitch Height** — a radial 3D-extrusion effect: the image bursts outward from a focal point into strong,
@@ -23,6 +23,8 @@ Four effects ship in the box:
 - **Night** — a neon "night" stylisation: the background is crushed to black while the in-focus subject glows in a
   cool teal/amber palette, with posterised banding, a vignette, and optional chunky shard shredding.
 - **Pixelate** — a blocky mosaic / pixel-art look, with optional retro color banding and soft blocks.
+- **Pop Art** — a Warhol-style silkscreen: a 2×2 grid where each quadrant is recoloured through a different duotone
+  palette, finished with a halftone dot screen and paper texture.
 
 ### Examples
 
@@ -43,6 +45,10 @@ Each effect shown in the app's before/after view.
 **Pixelate** — a blocky mosaic / pixel-art look:
 
 ![Pixelate effect before/after](docs/img/pixelate.png)
+
+**Pop Art** — a Warhol-style four-up silkscreen with a halftone dot screen:
+
+![Pop Art effect before/after](docs/img/pop-art.png)
 
 ### Video
 
@@ -170,6 +176,25 @@ python src/effects/pixelate.py workspace/photo.jpg --pixel-size 0.06 --levels 8 
 | Pixel size    | `--pixel-size` | Block size as a fraction of the longest edge (bigger = chunkier) | `0.03`  |
 | Color levels  | `--levels`     | Quantise each channel to N levels (256 = full color)             | `256`   |
 | Smooth blocks | `--smooth`     | Bilinear upscaling for soft blocks instead of hard pixels        | off     |
+
+#### Pop Art settings
+
+```bash
+python src/effects/popart.py path/to/image.jpg
+python src/effects/popart.py workspace/photo.jpg --contrast 0.7 --dots 0.6 --dot-size 0.012
+```
+
+The image is laid out as a 2×2 grid and each quadrant is recoloured through a different two/three-tone gradient map
+(maroon/olive, magenta/periwinkle, blue/yellow, green/pink), then overlaid with a halftone dot screen and a subtle
+paper texture — the classic Warhol silkscreen.
+
+| Setting       | CLI flag     | Description                                             | Default |
+|---------------|--------------|---------------------------------------------------------|---------|
+| Strength      | `--strength` | Blend between the original and the full pop-art result  | `1.0`   |
+| Contrast      | `--contrast` | Tonal punch before the colour mapping (higher = bolder) | `0.5`   |
+| Halftone      | `--dots`     | Strength of the halftone dot screen                     | `0.5`   |
+| Dot size      | `--dot-size` | Halftone cell size as a fraction of the quadrant width  | `0.01`  |
+| Paper texture | `--texture`  | Amount of canvas/paper grain over the print             | `0.3`   |
 
 ### Video (animated parameters)
 

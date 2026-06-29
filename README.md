@@ -15,11 +15,13 @@ and PyEffects interpolates those values across the frames and encodes a smooth M
 *Height* effect ramping from 0 to 100% strength. Frames render in parallel across your CPU cores and ffmpeg smooths
 the motion.
 
-Three effects ship in the box:
+Four effects ship in the box:
 
 - **Glitch** — RGB shift, slice displacement, noise, and scanlines.
 - **Glitch Height** — a radial 3D-extrusion effect: the image bursts outward from a focal point into strong,
   pointed, feathery spikes that grow toward the edges, with an optional circular frame.
+- **Night** — a neon "night" stylisation: the background is crushed to black while the in-focus subject glows in a
+  cool teal/amber palette, with posterised banding, a vignette, and optional chunky shard shredding.
 - **Pixelate** — a blocky mosaic / pixel-art look, with optional retro color banding and soft blocks.
 
 ### Examples
@@ -33,6 +35,10 @@ Each effect shown in the app's before/after view.
 **Glitch Height** — radial 3D extrusion bursting from a focal point:
 
 ![Glitch Height effect before/after](docs/img/glitch-height.png)
+
+**Night** — a neon "night" stylisation with a cool teal/amber palette:
+
+![Night effect before/after](docs/img/night.png)
 
 **Pixelate** — a blocky mosaic / pixel-art look:
 
@@ -131,6 +137,26 @@ python src/effects/glitch_height.py workspace/photo.jpg --strength 0.6 --center-
 | Detail         | `--detail`    | Number of extrusion steps (higher = smoother)     | `100`   |
 | Circular frame | `--circle`    | Mask the result to a circle, fading corners black | off     |
 | Scanlines      | `--scanlines` | Strength of the darkened CRT-style scanlines      | `0.0`   |
+
+#### Night settings
+
+```bash
+python src/effects/night.py path/to/image.jpg
+python src/effects/night.py workspace/photo.jpg --streaks 0.85 --levels 6 --vignette 0.8
+```
+
+The background is crushed to black while the in-focus subject glows in a cool teal/amber palette — the colour follows
+the subject's own hue, so warm features (eyes, nose, ears) turn amber while neutral fur and whiskers read cool. It is
+finished with posterised banding, a vignette, and a fine grain. Turn up `--streaks` for a chunky, shredded "shard" look.
+
+| Setting      | CLI flag     | Description                                                     | Default |
+|--------------|--------------|-----------------------------------------------------------------|---------|
+| Strength     | `--strength` | Blend between the original and the full night stylisation       | `1.0`   |
+| Detail glow  | `--detail`   | How strongly textured/in-focus areas light up vs. fade to black | `0.5`   |
+| Streaks      | `--streaks`  | Boldness of the hard-edged streak/block shredding (0 = smooth)  | `0.0`   |
+| Color levels | `--levels`   | Posterise each channel to this many levels (banding)            | `8`     |
+| Grain        | `--grain`    | Amount of fine film grain                                       | `0.035` |
+| Vignette     | `--vignette` | Darkening of the corners toward black                           | `0.7`   |
 
 #### Pixelate settings
 

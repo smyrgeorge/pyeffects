@@ -1,7 +1,6 @@
 # PyEffects
 
-A small desktop app (and CLI) for applying creative effects to your photos — with a live **before/after** preview and
-a built-in **video renderer** that animates an effect over time.
+A curated collection of creative photo effects — preview them live, run them from the CLI, or animate them into video.
 
 ## About
 
@@ -27,6 +26,9 @@ Five effects ship in the box:
 - **Pixelate** — a blocky mosaic / pixel-art look, with optional retro color banding and soft blocks.
 - **Pop Art** — a Warhol-style silkscreen: a 2×2 grid where each quadrant is recoloured through a different duotone
   palette, finished with a halftone dot screen and paper texture.
+
+> [!NOTE]
+> More effects are on the way — this is an ongoing project, and the collection keeps growing.
 
 ### Examples
 

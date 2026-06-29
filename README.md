@@ -8,7 +8,7 @@ a built-in **video renderer** that animates an effect over time.
 PyEffects is a lightweight Python toolkit for applying image effects. It ships with a reusable GUI that shows a
 before/after slider and builds its settings controls **dynamically** from whichever effect is selected. Adding a new
 effect only means implementing a small interface and registering it — the UI and command-line parser adapt
-automatically.
+automatically, and `python src/utils/gen_previews.py` renders its before/after preview for this README.
 
 It also **renders videos**: pick an effect, choose a *from → to* range for any of its variables (or several at once),
 and PyEffects interpolates those values across the frames and encodes a smooth MP4 — animating, for example, the
